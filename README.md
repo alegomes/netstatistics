@@ -9,8 +9,9 @@ This script was created to solve my personal problem, not the world. As such, it
 
 # ToDo
 
-*Avoid two running instances
-*Success message when sudo session is active
+* Avoid two running instances
+* Success message when sudo session is active
+* Ater starting, directions to the log
 
 # Licensing
 
