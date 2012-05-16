@@ -3,6 +3,7 @@
 LOG_FOLDER="/var/log/netstatistics"
 
 SERVER_DEFAULT="8.8.8.8" # Google DNS
+HEADER="timestamp;ssid;server tested;packet loss (%);round-trip min (ms);round-trip avg (ms);round-trip max (ms);round-trip std dev (ms);"
 
 function usage {
   echo 
@@ -11,7 +12,7 @@ function usage {
   echo 
   echo "Usage:"
   echo
-  echo "$ netstatistics [server_address]"
+  echo "$ netstatistics start|stop [server_address]"
   echo
   echo "  if no server address is specified, Google DNS Server will be used."
   echo
@@ -66,22 +67,44 @@ function collect_data() {
     SSID=$(networksetup -getairportnetwork en1 | cut -c 24-)
 
     LOG_FILE="$LOG_FOLDER/netstatistics-$(date +%Y%m%d).csv"
-    TIMESTAMP=$(date +"%d/%m/%Y %H:%M")
+
+	if [ -z $LOG_FILE ]; then
+		echo $HEADER
+	fi
+
+    TIMESTAMP=$(date +"%d/%m/%Y;%H:%M")
     run_ping $SERVER_ADDRESS
-    METRICS="${TIMESTAMP},${SSID},${SERVER_ADDRESS},${PING_LOG}"
+    METRICS="${TIMESTAMP};${SSID};${SERVER_ADDRESS};${PING_LOG}"
 
 	echo $METRICS >> $LOG_FILE
   done
 }
 
+function start {
+  PID=$$
+  if [ -z $1 ]; then
+	SERVER_ADDRESS=$SERVER_DEFAULT
+  fi
+}
+
 function stop {
-  echo "Saindo..."
+  # Ainda nao funciona.
+  echo "Finalizando processo ${PID}..."
+  #kill $PID
   exit 0
 }
 
-if [ -z $1 ]; then
-   SERVER_ADDRESS=$SERVER_DEFAULT
+if [ $# -lt 1 ]; then
+	usage
+	exit
 fi
+
+case $1 in
+  start )
+	start ;;
+  stop )
+    stop ;;
+esac
 
 trap "stop" HUP
 trap "stop" INT
@@ -92,4 +115,4 @@ trap "stop" KILL
 
 check_for_update
 check_log_folder
-collect_data
+(collect_data &)&
