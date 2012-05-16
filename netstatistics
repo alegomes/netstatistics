@@ -1,0 +1,95 @@
+#!/bin/bash
+
+LOG_FOLDER="/var/log/netstatistics"
+
+SERVER_DEFAULT="8.8.8.8" # Google DNS
+
+function usage {
+  echo 
+  echo "netstatistics collects statistics network data in CSV format."
+  echo "Generated files can be reached at /var/log/netstatistics"
+  echo 
+  echo "Usage:"
+  echo
+  echo "$ netstatistics [server_address]"
+  echo
+  echo "  if no server address is specified, Google DNS Server will be used."
+  echo
+}
+
+function check_for_update {
+  echo "Checking for updates coming soon..."
+}
+
+function check_log_folder {
+  USERNAME=$(whoami)
+
+  if [ ! -d $LOG_FOLDER ]; then
+	if [ ! -w ${LOG_FOLDER%/*} ]; then
+		echo "Sudo password required to create ${LOG_FOLDER}"
+    	sudo mkdir $LOG_FOLDER
+        sudo chmod a+w $LOG_FOLDER
+	fi
+  else
+    if [ ! -w $LOG_FOLDER ]; then
+		echo "Sudo password required to give write permission to $USERNAME in $LOG_FOLDER"
+        sudo chmod a+w $LOG_FOLDER
+	fi
+  fi
+}
+
+function run_ping {
+  PING_LOG_FILE=".ping"
+  IP=$1
+
+  rm ${PING_LOG_FILE} 2> /dev/null
+  ping -t 60 $IP > ${PING_LOG_FILE}
+
+  REGEX="^.*packets\ transmitted.*packets\ received,\ (.*)%\ packet\ loss.*round-trip\ min/avg/max/stddev\ =\ (.*)/(.*)/(.*)/(.*)\ ms" 
+  [[ $(cat $PING_LOG_FILE) =~ $REGEX ]]
+
+  PACKET_LOSS="${BASH_REMATCH[1]}"
+  ROUND_TRIP_MIN="${BASH_REMATCH[2]}"
+  ROUND_TRIP_AVG="${BASH_REMATCH[3]}"
+  ROUND_TRIP_MAX="${BASH_REMATCH[4]}"
+  ROUND_TRIP_STDDEV="${BASH_REMATCH[5]}"
+
+  PING_LOG="${PACKET_LOSS};${ROUND_TRIP_MIN};${ROUND_TRIP_AVG};${ROUND_TRIP_MAX};${ROUND_TRIP_STDDEV};"
+}
+
+function collect_data() {
+  while(true); do
+
+    # Outras formas de pegar o SSID:
+    # /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | awk '/ SSID/ {print substr($0, index($0, $2))}'
+    # system_profiler SPAirPortDataType | awk -F':' '/Current Network Information:/ {getline; print $1}'
+    SSID=$(networksetup -getairportnetwork en1 | cut -c 24-)
+
+    LOG_FILE="$LOG_FOLDER/netstatistics-$(date +%Y%m%d).csv"
+    TIMESTAMP=$(date +"%d/%m/%Y %H:%M")
+    run_ping $SERVER_ADDRESS
+    METRICS="${TIMESTAMP},${SSID},${SERVER_ADDRESS},${PING_LOG}"
+
+	echo $METRICS >> $LOG_FILE
+  done
+}
+
+function stop {
+  echo "Saindo..."
+  exit 0
+}
+
+if [ -z $1 ]; then
+   SERVER_ADDRESS=$SERVER_DEFAULT
+fi
+
+trap "stop" HUP
+trap "stop" INT
+trap "stop" QUIT
+trap "stop" PIPE
+trap "stop" TERM
+trap "stop" KILL
+
+check_for_update
+check_log_folder
+collect_data
