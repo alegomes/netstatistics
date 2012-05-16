@@ -3,7 +3,9 @@
 LOG_FOLDER="/var/log/netstatistics"
 
 SERVER_DEFAULT="8.8.8.8" # Google DNS
-HEADER="timestamp;ssid;server tested;packet loss (%);round-trip min (ms);round-trip avg (ms);round-trip max (ms);round-trip std dev (ms);"
+HEADER="timestamp;ssid;signal strength;server tested;packet loss (%);round-trip min (ms);round-trip avg (ms);round-trip max (ms);round-trip std dev (ms);"
+
+#PID_FILE="${HOME}/.netstatistics.pid"
 
 function usage {
   echo 
@@ -73,25 +75,39 @@ function collect_data() {
 	fi
 
     TIMESTAMP=$(date +"%d/%m/%Y;%H:%M")
+	SIGNAL_STRENGHT=$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | grep CtlRSSI | sed -e 's/^.*://g')
+	
     run_ping $SERVER_ADDRESS
-    METRICS="${TIMESTAMP};${SSID};${SERVER_ADDRESS};${PING_LOG}"
+    METRICS="${TIMESTAMP};${SSID};${SIGNAL_STRENGHT};${SERVER_ADDRESS};${PING_LOG}"
 
 	echo $METRICS >> $LOG_FILE
   done
 }
 
 function start {
-  PID=$$
+  #PID=$$
+  #echo $PID > $PID_FILE
   if [ -z $1 ]; then
 	SERVER_ADDRESS=$SERVER_DEFAULT
   fi
 }
 
 function stop {
-  # Ainda nao funciona.
+  #if [ -e $PID_FILE ]; then
+  #	PID=$(cat $PID_FILE)
+  #else
+    # Think about it
+	PID=$(ps aux | grep "bash ./netstatistics start" | grep -v grep | awk '{ print $2 }')
+  #fi
+
+  if [ -z $PID ]; then
+	echo "netstatistics not running..."
+	exit -1
+  fi
+
   echo "Finalizando processo ${PID}..."
-  #kill $PID
-  exit 0
+  kill $PID
+  exit
 }
 
 if [ $# -lt 1 ]; then
