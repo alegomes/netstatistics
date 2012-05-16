@@ -1,11 +1,10 @@
 #!/bin/bash
 
-LOG_FOLDER="/var/log/netstatistics"
+ORIGINAL_CMDS=$@
 
+LOG_FOLDER="/var/log/netstatistics"
 SERVER_DEFAULT="8.8.8.8" # Google DNS
 HEADER="timestamp;ssid;signal strength;noise;server tested;packet loss (%);round-trip min (ms);round-trip avg (ms);round-trip max (ms);round-trip std dev (ms);"
-
-#PID_FILE="${HOME}/.netstatistics.pid"
 
 function usage {
   echo 
@@ -18,10 +17,37 @@ function usage {
   echo
   echo "  if no server address is specified, Google DNS Server will be used."
   echo
+  exit 
+}
+
+function check_for_required_commands {
+	for reqcmd in wget; do
+	  if [[ -z "$(which $reqcmd)" ]]
+	  then
+	    echo "ERROR: Missing required '$reqcmd' command."
+	    exit 1
+	  fi
+	done
 }
 
 function check_for_update {
-  echo "Checking for updates coming soon..."
+	# Inspired by https://github.com/pmalves/ctools-installer
+	rm -rf .tmp
+	mkdir -p .tmp/dist
+
+	wget --no-check-certificate 'https://raw.github.com/alegomes/netstatistics/master/netstatistics' -P .tmp -o /dev/null
+
+	if ! diff $0 .tmp/netstatistics >/dev/null ; then
+	  answer="n"
+	  echo
+	  echo -n "There a new netstatistics version available. Do you want to upgrade? (y/N) "
+	  read -e answer
+
+	  case $answer in
+		 [Yy]* ) cp .tmp/netstatistics $0; echo "Upgrade successful. Rerunning command '$0 $ORIGINAL_CMDS'"; /bin/bash $0 $ORIGINAL_CMDS; exit 0;;
+	  esac
+
+	fi
 }
 
 function check_log_folder {
@@ -75,7 +101,7 @@ function collect_data() {
 	fi
 
     TIMESTAMP=$(date +"%d/%m/%Y;%H:%M")
-	SIGNAL_STRENGHT=$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | grep CtlRSSI | sed -e 's/^.*://g')
+	SIGNAL_STRENGHT=$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | grep CtlRSSI | sed -e 's/^.*: //g')
 	SIGNAL_NOISE=$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I  | grep -i agrCtlNoise | sed -e 's/^.*: //g')
 	
     run_ping $SERVER_ADDRESS
@@ -86,20 +112,13 @@ function collect_data() {
 }
 
 function start {
-  #PID=$$
-  #echo $PID > $PID_FILE
   if [ -z $1 ]; then
 	SERVER_ADDRESS=$SERVER_DEFAULT
   fi
 }
 
 function stop {
-  #if [ -e $PID_FILE ]; then
-  #	PID=$(cat $PID_FILE)
-  #else
-    # Think about it
-	PID=$(ps aux | grep "bash ./netstatistics start" | grep -v grep | awk '{ print $2 }')
-  #fi
+  PID=$(ps aux | grep "bash ./netstatistics start" | grep -v grep | awk '{ print $2 }')
 
   if [ -z $PID ]; then
 	echo "netstatistics not running..."
@@ -111,10 +130,12 @@ function stop {
   exit
 }
 
-if [ $# -lt 1 ]; then
-	usage
-	exit
-fi
+
+###############
+# BEGIN
+###############
+
+[ $# -gt 0 ] || usage
 
 case $1 in
   start )
@@ -130,6 +151,7 @@ trap "stop" PIPE
 trap "stop" TERM
 trap "stop" KILL
 
+check_for_required_commands
 check_for_update
 check_log_folder
 (collect_data &)&
