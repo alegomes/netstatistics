@@ -16,4 +16,5 @@ This script was created to solve my personal problem, not the world. As such, it
 # Licensing
 
 Copyright 2012 Alexandre Gomes
+
 This program is distributed under the terms of the GNU General Public License 
