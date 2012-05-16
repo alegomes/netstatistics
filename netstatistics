@@ -3,7 +3,7 @@
 LOG_FOLDER="/var/log/netstatistics"
 
 SERVER_DEFAULT="8.8.8.8" # Google DNS
-HEADER="timestamp;ssid;signal strength;server tested;packet loss (%);round-trip min (ms);round-trip avg (ms);round-trip max (ms);round-trip std dev (ms);"
+HEADER="timestamp;ssid;signal strength;noise;server tested;packet loss (%);round-trip min (ms);round-trip avg (ms);round-trip max (ms);round-trip std dev (ms);"
 
 #PID_FILE="${HOME}/.netstatistics.pid"
 
@@ -76,9 +76,10 @@ function collect_data() {
 
     TIMESTAMP=$(date +"%d/%m/%Y;%H:%M")
 	SIGNAL_STRENGHT=$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | grep CtlRSSI | sed -e 's/^.*://g')
+	SIGNAL_NOISE=$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I  | grep -i agrCtlNoise | sed -e 's/^.*: //g')
 	
     run_ping $SERVER_ADDRESS
-    METRICS="${TIMESTAMP};${SSID};${SIGNAL_STRENGHT};${SERVER_ADDRESS};${PING_LOG}"
+    METRICS="${TIMESTAMP};${SSID};${SIGNAL_STRENGHT};${SIGNAL_NOISE};${SERVER_ADDRESS};${PING_LOG}"
 
 	echo $METRICS >> $LOG_FILE
   done
