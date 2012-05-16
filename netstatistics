@@ -46,7 +46,9 @@ function check_for_required_commands {
 	for reqcmd in wget; do
 	  if [[ -z "$(which $reqcmd)" ]]
 	  then
+	    echo
 	    echo "ERROR: Missing required '$reqcmd' command."
+	    echo
 	    exit 1
 	  fi
 	done
@@ -80,18 +82,20 @@ function check_log_folder {
 		echo "Sudo password required to create ${LOG_FOLDER}"
     	sudo mkdir $LOG_FOLDER
         sudo chmod a+w $LOG_FOLDER
+		echo "$LOG_FOLDER created successfully"
 	fi
   else
     if [ ! -w $LOG_FOLDER ]; then
 		echo "Sudo password required to give write permission to $USERNAME in $LOG_FOLDER"
         sudo chmod a+w $LOG_FOLDER
+		echo "Write permission successfully set on $LOG_FOLDER"
 	fi
   fi
 }
 
 function run_ping {
-  PING_LOG_FILE=".ping"
   IP=$1
+  PING_LOG_FILE=".ping.$IP"
 
   rm ${PING_LOG_FILE} 2> /dev/null
   ping -t 60 $IP > ${PING_LOG_FILE}
