@@ -25,7 +25,7 @@
 ORIGINAL_CMDS=$@
 
 LOG_FOLDER="/var/log/netstatistics"
-HEADER="timestamp;mac address;ssid;signal strength;noise;server tested;packet loss (%);round-trip min (ms);round-trip avg (ms);round-trip max (ms);round-trip std dev (ms);"
+HEADER="timestamp;mac address;kernel;ssid;signal strength;noise;server tested;packet loss (%);round-trip min (ms);round-trip avg (ms);round-trip max (ms);round-trip std dev (ms);"
 
 function usage {
   echo 
@@ -134,11 +134,12 @@ function collect_data {
 
     TIMESTAMP=$(date +"%d/%m/%Y;%H:%M")
 	MAC=$(ifconfig en1 | grep ether | awk '{print $2}')
+	KERNEL_VERSION=$(uname -r)
 	SIGNAL_STRENGHT=$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | grep CtlRSSI | sed -e 's/^.*: //g')
 	SIGNAL_NOISE=$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I  | grep -i agrCtlNoise | sed -e 's/^.*: //g')
 	
     run_ping $SERVER_ADDRESS
-    METRICS="${TIMESTAMP};${MAC};${SSID};${SIGNAL_STRENGHT};${SIGNAL_NOISE};${SERVER_ADDRESS};${PING_LOG}"
+    METRICS="${TIMESTAMP};${MAC};${KERNEL_VERSION};${SSID};${SIGNAL_STRENGHT};${SIGNAL_NOISE};${SERVER_ADDRESS};${PING_LOG}"
 
 	echo $METRICS >> $LOG_FILE
   done
