@@ -9,6 +9,7 @@ This script was created to solve my personal problem, not the world. As such, it
 
 # ToDo
 
+* Fix stop function 
 * Avoid two running instances
 * Success message when sudo session is active
 * Ater starting, directions to the log

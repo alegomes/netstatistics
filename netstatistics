@@ -25,7 +25,6 @@
 ORIGINAL_CMDS=$@
 
 LOG_FOLDER="/var/log/netstatistics"
-SERVER_DEFAULT="8.8.8.8" # Google DNS
 HEADER="timestamp;ssid;signal strength;noise;server tested;packet loss (%);round-trip min (ms);round-trip avg (ms);round-trip max (ms);round-trip std dev (ms);"
 
 function usage {
@@ -35,12 +34,17 @@ function usage {
   echo 
   echo "Usage:"
   echo
-  echo "$ netstatistics start|stop [server_address]"
+  echo "$ netstatistics start|stop [server_address1] [server_address2] ..."
   echo
-  echo "  if no server address is specified, Google DNS Server will be used."
+  echo "  if no server address is specified, 3 addresses will be used to statistics:"
+  echo
+  echo "    1. default gateway (e.g. 10.1.1.1)"
+  echo "    2. primary DNS (/etc/resolv.conf)"
+  echo "    3. Google DNS Server (8.8.8.8)"
   echo
   exit 
 }
+
 
 function check_for_required_commands {
 	for reqcmd in wget; do
@@ -95,7 +99,7 @@ function check_log_folder {
 
 function run_ping {
   IP=$1
-  PING_LOG_FILE=".ping.$IP"
+  PING_LOG_FILE=".ping.${IP}"
 
   rm ${PING_LOG_FILE} 2> /dev/null
   ping -t 60 $IP > ${PING_LOG_FILE}
@@ -112,9 +116,11 @@ function run_ping {
   PING_LOG="${PACKET_LOSS};${ROUND_TRIP_MIN};${ROUND_TRIP_AVG};${ROUND_TRIP_MAX};${ROUND_TRIP_STDDEV};"
 }
 
-function collect_data() {
-  while(true); do
+function collect_data {
 
+  SERVER_ADDRESS=$1
+
+  while(true); do
     # Outras formas de pegar o SSID:
     # /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | awk '/ SSID/ {print substr($0, index($0, $2))}'
     # system_profiler SPAirPortDataType | awk -F':' '/Current Network Information:/ {getline; print $1}'
@@ -137,24 +143,66 @@ function collect_data() {
   done
 }
 
+function execute_recursion {
+
+	declare -a SERVERS
+	if [ $# -eq 1 ]; then
+		DEFAULT_GATEWAY=$(netstat -nr | grep '^default' | awk '{print $2}')
+		PRIMARY_DNS=$(cat /etc/resolv.conf | grep nameserver | head -1 | awk '{print $2}')
+		GOOGLE_DNS="8.8.8.8"
+		
+		SERVERS=($DEFAULT_GATEWAY $PRIMARY_DNS $GOOGLE_DNS)
+	else 
+		if [ $# -gt 1 ]; then
+			i=0
+			shift # Ignore first argument (start)
+			while test $# -gt 0; do
+				SERVERS[$i]=$1
+				(( i = i + 1 ))
+				shift
+			done
+		fi
+	fi
+	
+	for ADDRESS in ${SERVERS[*]}; do
+		CMD="/bin/bash $0 start $ADDRESS"
+		echo "Calling $CMD"
+		$CMD
+	done
+	
+}
+
+function execute_script {
+  check_for_required_commands
+  #check_for_update
+  check_log_folder
+  echo "Collected data available at $LOG_FOLDER"
+  (collect_data $1 &)&
+}
+
 function start {
-  if [ -z $1 ]; then
-	SERVER_ADDRESS=$SERVER_DEFAULT
-  fi
+  case $# in
+	2) 
+	  execute_script $2
+	  ;;
+	*) 
+	  execute_recursion $@
+  esac
 }
 
 function stop {
-  PID=$(ps aux | grep "bash ./netstatistics start" | grep -v grep | awk '{ print $2 }')
+  PID=$(ps aux | grep "$0 start" | grep -v grep | awk '{ print $2 }')
 
   if [ -z $PID ]; then
 	echo "netstatistics not running..."
 	exit -1
   fi
 
-  echo "Finalizando processo ${PID}..."
+  echo "Killing process ${PID}..."
   kill $PID
   exit
 }
+
 
 
 ###############
@@ -163,13 +211,6 @@ function stop {
 
 [ $# -gt 0 ] || usage
 
-case $1 in
-  start )
-	start ;;
-  stop )
-    stop ;;
-esac
-
 trap "stop" HUP
 trap "stop" INT
 trap "stop" QUIT
@@ -177,7 +218,11 @@ trap "stop" PIPE
 trap "stop" TERM
 trap "stop" KILL
 
-check_for_required_commands
-check_for_update
-check_log_folder
-(collect_data &)&
+case $1 in
+  start )
+	start $@ ;;
+  stop )
+    stop ;;
+  * )
+    usage ;;
+esac
