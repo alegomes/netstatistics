@@ -204,7 +204,9 @@ function stop {
   exit
 }
 
-
+function status {
+  ps aux | grep -i netstat | grep -v grep | grep -v tail | grep -v status
+}
 
 ###############
 # BEGIN
@@ -224,6 +226,8 @@ case $1 in
 	start $@ ;;
   stop )
     stop ;;
+  status )
+    status ;;
   * )
     usage ;;
 esac
