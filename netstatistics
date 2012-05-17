@@ -34,7 +34,7 @@ function usage {
   echo 
   echo "Usage:"
   echo
-  echo "$ netstatistics start|stop [server_address1] [server_address2] ..."
+  echo "$ netstatistics start|stop|status [server_address1] [server_address2] ..."
   echo
   echo "  if no server address is specified, 3 addresses will be used to statistics:"
   echo
