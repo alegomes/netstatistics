@@ -102,16 +102,23 @@ function run_ping {
   PING_LOG_FILE=".ping.${IP}"
 
   rm ${PING_LOG_FILE} 2> /dev/null
-  ping -t 60 $IP > ${PING_LOG_FILE}
+  ping -t 60 $IP &> ${PING_LOG_FILE}
 
-  REGEX="^.*packets\ transmitted.*packets\ received,\ (.*)%\ packet\ loss.*round-trip\ min/avg/max/stddev\ =\ (.*)/(.*)/(.*)/(.*)\ ms" 
-  [[ $(cat $PING_LOG_FILE) =~ $REGEX ]]
+  REGEX1="^.*packets\ transmitted.*packets\ received,\ (.*)%\ packet\ loss.*"
+  [[ $(cat $PING_LOG_FILE) =~ $REGEX1 ]]
+
+  PACKET_LOSS="${BASH_REMATCH[1]}"
+
+  REGEX2="round-trip\ min/avg/max/stddev\ =\ (.*)/(.*)/(.*)/(.*)\ ms" 
+  [[ $(cat $PING_LOG_FILE) =~ $REGEX1 ]]
 
   PACKET_LOSS="${BASH_REMATCH[1]}"
   ROUND_TRIP_MIN="${BASH_REMATCH[2]}"
   ROUND_TRIP_AVG="${BASH_REMATCH[3]}"
   ROUND_TRIP_MAX="${BASH_REMATCH[4]}"
   ROUND_TRIP_STDDEV="${BASH_REMATCH[5]}"
+
+  #[[ -z $PACKET_LOSS ]] && PACKET_LOSS="100.0"
 
   PING_LOG="${PACKET_LOSS};${ROUND_TRIP_MIN};${ROUND_TRIP_AVG};${ROUND_TRIP_MAX};${ROUND_TRIP_STDDEV};"
 }
