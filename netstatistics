@@ -192,15 +192,17 @@ function start {
 }
 
 function stop {
-  PID=$(ps aux | grep "$0 start" | grep -v grep | awk '{ print $2 }')
+  PIDS=$(ps aux | grep "$0 start" | grep -v grep | awk '{ print $2 }')
 
-  if [ -z $PID ]; then
+  if [ -z "$PIDS" ]; then
 	echo "netstatistics not running..."
 	exit -1
   fi
 
-  echo "Killing process ${PID}..."
-  kill $PID
+  for PID in $PIDS; do
+	  echo "Killing process ${PID}..."
+	  kill $PID
+  done
   exit
 }
 
