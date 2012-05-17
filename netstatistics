@@ -124,7 +124,7 @@ function collect_data {
     # Outras formas de pegar o SSID:
     # /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | awk '/ SSID/ {print substr($0, index($0, $2))}'
     # system_profiler SPAirPortDataType | awk -F':' '/Current Network Information:/ {getline; print $1}'
-    SSID=$(networksetup -getairportnetwork en1 | cut -c 24-)
+    SSID=$(networksetup -getairportnetwork en1 | sed -e 's/^.*: //g')
 
     LOG_FILE="$LOG_FOLDER/netstatistics-$(date +%Y%m%d).csv"
 
