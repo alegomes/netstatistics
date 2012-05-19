@@ -26,6 +26,7 @@ ORIGINAL_CMDS=$@
 
 LOG_FOLDER="/var/log/netstatistics"
 HEADER="timestamp;mac address;kernel;ssid;signal strength;noise;server tested;packet loss (%);round-trip min (ms);round-trip avg (ms);round-trip max (ms);round-trip std dev (ms);"
+PING_WINDOW=60
 
 function usage {
   echo 
@@ -34,13 +35,7 @@ function usage {
   echo 
   echo "Usage:"
   echo
-  echo "$ netstatistics start|stop|status [server_address1] [server_address2] ..."
-  echo
-  echo "  if no server address is specified, 3 addresses will be used to statistics:"
-  echo
-  echo "    1. default gateway (e.g. 10.1.1.1)"
-  echo "    2. primary DNS (/etc/resolv.conf)"
-  echo "    3. Google DNS Server (8.8.8.8)"
+  echo "$ netstatistics start|stop|status "
   echo
   exit 
 }
@@ -102,7 +97,7 @@ function run_ping {
   PING_LOG_FILE=".ping.${IP}"
 
   rm ${PING_LOG_FILE} 2> /dev/null
-  ping -t 60 $IP &> ${PING_LOG_FILE}
+  ping -t $PING_WINDOW $IP &> ${PING_LOG_FILE}
 
   REGEX1="^.*packets\ transmitted.*packets\ received,\ (.*)%\ packet\ loss.*"
   [[ $(cat $PING_LOG_FILE) =~ $REGEX1 ]]
@@ -110,97 +105,81 @@ function run_ping {
   PACKET_LOSS="${BASH_REMATCH[1]}"
 
   REGEX2="round-trip\ min/avg/max/stddev\ =\ (.*)/(.*)/(.*)/(.*)\ ms" 
-  [[ $(cat $PING_LOG_FILE) =~ $REGEX1 ]]
+  [[ $(cat $PING_LOG_FILE) =~ $REGEX2 ]]
 
-  PACKET_LOSS="${BASH_REMATCH[1]}"
-  ROUND_TRIP_MIN="${BASH_REMATCH[2]}"
-  ROUND_TRIP_AVG="${BASH_REMATCH[3]}"
-  ROUND_TRIP_MAX="${BASH_REMATCH[4]}"
-  ROUND_TRIP_STDDEV="${BASH_REMATCH[5]}"
+  ROUND_TRIP_MIN="${BASH_REMATCH[1]}"
+  ROUND_TRIP_AVG="${BASH_REMATCH[2]}"
+  ROUND_TRIP_MAX="${BASH_REMATCH[3]}"
+  ROUND_TRIP_STDDEV="${BASH_REMATCH[4]}"
 
   #[[ -z $PACKET_LOSS ]] && PACKET_LOSS="100.0"
 
-  PING_LOG="${PACKET_LOSS};${ROUND_TRIP_MIN};${ROUND_TRIP_AVG};${ROUND_TRIP_MAX};${ROUND_TRIP_STDDEV};"
+  echo "${PACKET_LOSS};${ROUND_TRIP_MIN};${ROUND_TRIP_AVG};${ROUND_TRIP_MAX};${ROUND_TRIP_STDDEV};"
 }
 
 function collect_data {
 
-  SERVER_ADDRESS=$1
-
-  while(true); do
-    # Outras formas de pegar o SSID:
-    # /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | awk '/ SSID/ {print substr($0, index($0, $2))}'
-    # system_profiler SPAirPortDataType | awk -F':' '/Current Network Information:/ {getline; print $1}'
-    SSID=$(networksetup -getairportnetwork en1 | sed -e 's/^.*: //g')
-
-    LOG_FILE="$LOG_FOLDER/netstatistics-$(date +%Y%m%d).csv"
-
+	# Log file
+	
+	LOG_FILE="$LOG_FOLDER/netstatistics-$(date +%Y%m%d).csv"
 	if [ -z $LOG_FILE ]; then
 		echo $HEADER
 	fi
+	
+	# Servers
+	
+	DEFAULT_GATEWAY=$(netstat -nr | grep '^default' | awk '{print $2}')
+	PRIMARY_DNS=$(cat /etc/resolv.conf | grep nameserver | head -1 | awk '{print $2}')
+	GOOGLE_DNS="8.8.8.8"
+	SERVERS=($DEFAULT_GATEWAY $PRIMARY_DNS $GOOGLE_DNS)
 
-    TIMESTAMP=$(date +"%d/%m/%Y;%H:%M")
+	# Metrics
+	
+	# Outras formas de pegar o SSID:
+	# /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | awk '/ SSID/ {print substr($0, index($0, $2))}'
+	# system_profiler SPAirPortDataType | awk -F':' '/Current Network Information:/ {getline; print $1}'
+	SSID=$(networksetup -getairportnetwork en1 | sed -e 's/^.*: //g')
+	TIMESTAMP=$(date +"%d/%m/%Y;%H:%M")
 	MAC=$(ifconfig en1 | grep ether | awk '{print $2}')
 	KERNEL_VERSION=$(uname -r)
 	SIGNAL_STRENGHT=$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I | grep CtlRSSI | sed -e 's/^.*: //g')
 	SIGNAL_NOISE=$(/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I  | grep -i agrCtlNoise | sed -e 's/^.*: //g')
-	
-    run_ping $SERVER_ADDRESS
-    METRICS="${TIMESTAMP};${MAC};${KERNEL_VERSION};${SSID};${SIGNAL_STRENGHT};${SIGNAL_NOISE};${SERVER_ADDRESS};${PING_LOG}"
 
-	echo $METRICS >> $LOG_FILE
-  done
+#	for ADDRESS in ${SERVERS[*]}; do
+	DEFAULT_GATEWAY_METRICS="/bin/bash $0 ping $DEFAULT_GATEWAY"
+	#echo "Calling [$DEFAULT_GATEWAY_METRICS]"
+	echo "${TIMESTAMP};${MAC};${KERNEL_VERSION};${SSID};${SIGNAL_STRENGHT};${SIGNAL_NOISE};${DEFAULT_GATEWAY};$($DEFAULT_GATEWAY_METRICS)" >> $LOG_FILE &
+	
+	PRIMARY_DNS_METRICS="/bin/bash $0 ping $PRIMARY_DNS"
+	#echo "Calling [$PRIMARY_DNS_METRICS]"
+	echo "${TIMESTAMP};${MAC};${KERNEL_VERSION};${SSID};${SIGNAL_STRENGHT};${SIGNAL_NOISE};${PRIMARY_DNS};$($PRIMARY_DNS_METRICS)" >> $LOG_FILE &
+
+	GOOGLE_DNS_METRICS="/bin/bash $0 ping $GOOGLE_DNS"
+	#echo "Calling [$GOOGLE_DNS_METRICS]"
+	echo "${TIMESTAMP};${MAC};${KERNEL_VERSION};${SSID};${SIGNAL_STRENGHT};${SIGNAL_NOISE};${GOOGLE_DNS};$($GOOGLE_DNS_METRICS)" >> $LOG_FILE &
+
+#	done
 }
 
-function execute_recursion {
 
-	declare -a SERVERS
-	if [ $# -eq 1 ]; then
-		DEFAULT_GATEWAY=$(netstat -nr | grep '^default' | awk '{print $2}')
-		PRIMARY_DNS=$(cat /etc/resolv.conf | grep nameserver | head -1 | awk '{print $2}')
-		GOOGLE_DNS="8.8.8.8"
-		
-		SERVERS=($DEFAULT_GATEWAY $PRIMARY_DNS $GOOGLE_DNS)
-	else 
-		if [ $# -gt 1 ]; then
-			i=0
-			shift # Ignore first argument (start)
-			while test $# -gt 0; do
-				SERVERS[$i]=$1
-				(( i = i + 1 ))
-				shift
-			done
-		fi
-	fi
-	
-	for ADDRESS in ${SERVERS[*]}; do
-		CMD="/bin/bash $0 start $ADDRESS"
-		echo "Calling $CMD"
-		$CMD
-	done
-	
-}
+function start {
 
-function execute_script {
   check_for_required_commands
   check_for_update
   check_log_folder
   echo "Collected data available at $LOG_FOLDER"
-  (collect_data $1 &)&
-}
 
-function start {
-  case $# in
-	2) 
-	  execute_script $2
-	  ;;
-	*) 
-	  execute_recursion $@
-  esac
+  while(true); do
+  	(collect_data &)&
+
+	let WAIT_TIME=($PING_WINDOW * 2 )
+	sleep $WAIT_TIME
+  done
+
 }
 
 function stop {
-  PIDS=$(ps aux | grep "$0 start" | grep -v grep | awk '{ print $2 }')
+  PIDS=$(ps aux | grep bash | grep "$0" | grep -v grep | awk '{ print $2 }')
 
   if [ -z "$PIDS" ]; then
 	echo "netstatistics not running..."
@@ -233,11 +212,18 @@ trap "stop" KILL
 
 case $1 in
   start )
-	start $@ ;;
+	start
+	;;
   stop )
-    stop ;;
+    stop
+	;;
   status )
-    status ;;
+    status
+	;;
+  ping )
+	run_ping $2
+	;;
   * )
-    usage ;;
+    usage
+	;;
 esac
